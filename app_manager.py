@@ -94,7 +94,8 @@ def validate_league(league):
     then default it to return 9.
     '''
     if league is None:
-        return (9)
+        return (150)
+        return(9)
 
     known_leagues = {
         "NFL":9,
@@ -124,21 +125,25 @@ if __name__ == "__main__":
     '''
     Eventually, this will be the code that is the manager for the scraper that keep running all the time
     '''
-    fn = "example_wp.json"
+    wp = None
+    prizepicks_db.to_db(wp)
+    exit()
+    
+    fn = "example_wp_inflight.json"
     use_local = True
     ow_local = False
     file_check = os.path.isfile(fn)
     wp = None
 
     if ow_local:
-        print("OW Local...")
+        print(f"OW Local '{fn}'...")
         wp = make_selenium_request()
         save_wp_data(wp, fn)
 
     elif use_local:
-        print("Reading from local html file...")
+        print(f"Reading from local file '{fn}'")
         if (file_check is False) or (os.stat(fn).st_size == 0):
-            print("File does not exist or is empty. Attempting re-write...")
+            print(f"File '{fn} does not exist or is empty. Attempting re-write...")
             wp = make_selenium_request()
             save_wp_data(wp, fn)
         else:
@@ -150,7 +155,3 @@ if __name__ == "__main__":
     else:
         print("Parsing data from internet request...")
         wp = make_selenium_request()
-
-    prizepicks_db.to_db(wp)
-
-    exit()
