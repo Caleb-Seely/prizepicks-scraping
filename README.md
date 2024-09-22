@@ -1,2 +1,2 @@
-# pp scraping
+# PrizePicks scraping
  Collecting data on PrizePicks spreads
