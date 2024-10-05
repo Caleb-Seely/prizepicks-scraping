@@ -1,4 +1,3 @@
-from bs4 import BeautifulSoup
 from selenium import webdriver
 import helper
 #import httpx - Not used in current implementation, could be added back in  future

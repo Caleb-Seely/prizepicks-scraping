@@ -12,7 +12,7 @@ def save_wp_data(wp, fn):
             file.write(wp)
         print(f"Wrote WP to: {fn}")
 
-def get_wp_example(fn = "example_wp.json"):
+def get_wp_example(fn = "example_wp.html"):
     
     use_local = True
     ow_local = False
@@ -38,11 +38,13 @@ def get_wp_example(fn = "example_wp.json"):
     else:
         print("Parsing data from internet request...")
         wp = web_scraper.make_selenium_request()
+    
+    return wp
 
 if __name__ == "__main__":
     '''
     Eventually, this will be the code that is the manager for the scraper that keep running all the time
     '''
-    wp = get_wp_example()
+    my_var = my_parser.parse_webpage(get_wp_example())
 
 
