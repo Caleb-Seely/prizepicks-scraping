@@ -1,5 +1,6 @@
-denied.html
-example_wp - Copy.json
+example_sql_config.config
+example_wp_inflight.json
 example_wp.json
 local_config.pkl
 __pycache__/
+secrets.txt
