@@ -42,7 +42,8 @@ def validate_league(league):
         "CFB":15,
         "MLB":2,
         "WNBA":3,
-        "Soccer":82
+        "Soccer":82,
+        "CFB2H": 150
     }
     return known_leagues.get(league)
 
