@@ -13,7 +13,11 @@ def parse_webpage(webpage):
     Parsing the data tags will return a list of values to coorespond to each of the values in the 'data_order' list. Before adding it all into the mySQL db.
     '''
     '''---Get the json data from the raw html---'''
-    soup = BeautifulSoup(webpage, 'html.parser')
+    
+    soup = valid_wp(webpage)
+    if soup is False:
+        return False
+    
     json_data = json.loads(soup.find('pre').text)
 
     '''---Defining order that data will go in as to align with SQL columns---'''
@@ -51,11 +55,12 @@ def parse_webpage(webpage):
     '''---Define large data structure where all the parsed data will reside until it is sent to mySQL---'''
     all_data = []
 
+    print("Parsing 'data' tags...")
     for item in json_data['data']:
         '''---For each of the tags in the 'data' tag, send them all to the 'data' parser to get the necessary data from the json---'''
         my_data = parse_data(item, data_order)
         all_data.append(my_data)
-
+    print(f"Parsed 'data' with {len(all_data)} entries")
     '''---After the 'data' section of the json, it goes to the 'included' tag which can contain many different tags---'''
 
     '''---Defining order for all the the types of tags within the 'included' tag---'''
@@ -68,7 +73,7 @@ def parse_webpage(webpage):
         "projection_type":      ["id", "name"],
         "stat_average":         ["id", "average", "count"],
         "stat_type":            ["id", "lfg_ignored_leagues", "name", "rank"],
-        "team":                 ["id", "primary_color", "appreviation", "name", "tertiary_color", "secondary_color", "market"]
+        "team":                 ["id", "primary_color", "abbreviation", "name", "tertiary_color", "secondary_color", "market"]
     }
 
     '''---Large structure where all the data will get stored before going to mysql---'''
@@ -84,9 +89,10 @@ def parse_webpage(webpage):
         "team": []
     }
 
+    print("Parsing 'included' tags...")
+
     for item in json_data['included']:
         '''---Going through all of the 'included' tags and parsing them one by one---'''
-
         my_type = item['type']
         '''
         'new_player' and 'league' tags have relationship dicts which make them different from 
@@ -103,21 +109,27 @@ def parse_webpage(webpage):
             exit()
 
         '''---Adds the parsed tag to the big data dictionary to store before sending to mySQL---'''
-        if my_type == "league" and parsed_include.get('data') is not None:
-            '''
-            'league' tag can include additional list of data, but not always. In the case that the list of data is included in
-            there, this must be handled uniquely to get the list of data also saved in the database. This code handles that case.
-            '''
-            league_data = parsed_include.get('data')
+
+        '''
+        'league' tag can include additional list of data, but not always. In the case that the list of data is included in
+        there, this must be handled uniquely to get the list of data also saved in the database. This code handles that case.
+        '''
+        if my_type == "league" and parsed_include[-1] is not None:
+            league_data = parsed_include[-1]
             data_list = league_data[0]
             timestamp = league_data[1]
-            league_id = parsed_include['id']
+            league_id = parsed_include[0]
             for val in data_list:
                 included_tag_values['league_data'].append([league_id, timestamp, val])
-            parsed_include['data'] = True
+            parsed_include[-1] = True
 
         included_tag_values[my_type].append(parsed_include)
+        my_tot = 0
+    for _,v in included_tag_values.items():
+        my_tot+=len(v)
+    print(f"Parsed 'include' with {my_tot} entries")
 
+    return True
 
 def parse_included(my_tag, order):
     '''
@@ -136,7 +148,7 @@ def parse_included(my_tag, order):
 
     '''---For 'new_player' and 'league' tags, some special parsing is need to get some unique data, so we need to account for that---'''
     if my_tag['type'] == 'new_player':
-        my_dict['team_id'] = my_tag['relationships']['team_data']['id']
+        my_dict['team_id'] = my_tag['relationships']['team_data']['data']['id']
         not_found.remove('team_id')
     elif my_tag['type'] == 'league':
         temp_data = my_tag['relationships']['projection_filters']['data']
@@ -153,7 +165,13 @@ def parse_included(my_tag, order):
     '''---Look for the remaining tags we need in the attributes tag and add those to the dict---'''
     remaining = not_found.copy()
     for attr in remaining:
-        my_dict[attr] = my_tag[attr]
+        try:
+            my_dict[attr] = my_tag['attributes'][attr]
+        except Exception as e:
+            print(my_tag)
+            print(e)
+            print("---Exited Early---")
+            exit()
         not_found.remove(attr)
 
     '''---Print statements to help with validation---'''
@@ -165,13 +183,7 @@ def parse_included(my_tag, order):
         print()
         input("Review if this is ok...")
     to_return = [ my_dict[item] for item in order ]
-    print("\n-------my_dict-------")
-    print(my_dict)
-    print("\n-------order-----")
-    print(order)
-    print("\n------to_return-----")
-    print(to_return)
-    input()
+
     return to_return
 
 def parse_data(data_item, order):
@@ -182,7 +194,7 @@ def parse_data(data_item, order):
     This also has some tracking/debugging in it where I'm tracking which items are not getting filled up or being double-filled. It may not be very 
     useful in the future, but for validation, I'm going to leave it in there.
     '''
-    '''---Dict sets yup all the columns that will be added into SQL db for the data table---'''
+    '''---Dict sets up all the columns that will be added into SQL db for the data table---'''
     my_dict = {
         "type": None,
         "id": None,
@@ -214,6 +226,12 @@ def parse_data(data_item, order):
         "stat_type_id": None
     }
 
+    '''---Some fields are not alwas in a data tag, so this allows the code to know which things it is ok to not have in a tag---'''
+    not_promised = {
+        "hr_20"
+    }
+
+    '''---Setting up structure to track what fields have been parsed from the tag---'''
     not_found = set(my_dict.keys())
 
     '''---Where the data is not held in a sub-dict, can add that info directly from the json tag to my_dict without iterating over the sub-dict---'''
@@ -240,7 +258,7 @@ def parse_data(data_item, order):
 
     '''
     These are 2 exceptions where the naming is not the same between prizepicks api and my db since thes'stat_type' and 'projection_type' 
-    are already used in the 'attuributes' tag, so need to hard-code this one.
+    are already used in the 'attuributes' tag, so need to hard-code these exceptions.
     '''
     #If these are stored in another table, I may not need to save everything twice, I can just get this infor from the other table using the ids - will check on that as work continues
     my_dict["projection_type_id"] = data_item['relationships']['projection_type']['data'].get('id')
@@ -248,13 +266,24 @@ def parse_data(data_item, order):
     not_found.remove('projection_type_id')
     not_found.remove('stat_type_id')
     
+    '''
+    This code block is just for dev/validation purposes it just prints out anything that was expected by not seen by the parser
+    '''
     if len(not_found) > 0:
-        print(f"\n\n------------From below tag------------\n")
-        for key, val in data_item.items():print(f"{key}\t{val}")
-        print("\n-----------Could not find data for the following-----------\n")
-        for k in not_found: print(f"{k},")
-        print()
-        input("Review if this is ok...")
+        '''---Since some things are not guarunteed to be in a data tag, this makes sure it is only notifying tester if something expected is missing---'''
+        still_print = False
+        for item in not_found: 
+            if item not in not_promised:
+                still_print = True
+                break
+        '''---Printing out everything in the tag and all the things missing from the tag---'''
+        if still_print:
+            print(f"\n\n------------From below tag------------\n")
+            for key, val in data_item.items(): print(f"{key}\t{val}")
+            print("\n-----------Could not find data for the following-----------\n")
+            for k in not_found: print(f"{k},")
+            print()
+            input("Review if this is ok...")
     '''
     print("Final data to send to SQL:")
     for k,v in my_dict.items(): print(f"{k}\t\t\t{v}")
@@ -262,3 +291,33 @@ def parse_data(data_item, order):
     '''
     return [my_dict[key] for key in order]
 
+def valid_wp(wp):
+    '''
+    Function to validate that the webpage is valid and ok to begin parsing before doing so. The function looks for a few things:
+    1. Check if the wp passed in can even be parsed as html by beautifulsoup
+    2. Looks for 'pre' tag since that is wher the json data is stored
+    3. Skips one tag (where the json data should be) and checks to see if the tag following the json data is  'json-formatter-container'.
+
+    Arguement:
+        wp - variable containing data from the the prizepicks API call
+
+    Funtion returns beautifulsoup instance if the wp looks parsable and false if not.
+    '''
+
+
+    try:
+        to_validate = BeautifulSoup(wp, "html.parser")
+    except:
+        return False
+    
+    pre = to_validate.find("pre")
+    if pre.name != "pre":
+        print("Expected to be 'pre' tag")
+        return False
+    json_data = pre.next_element
+    div = json_data.next_element
+    if div['class'][0] != "json-formatter-container":
+        print("Expected to be json-formatter class")
+        return False
+    
+    return to_validate
