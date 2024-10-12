@@ -1,18 +1,21 @@
-from bs4 import BeautifulSoup
 from selenium import webdriver
 import helper
-#import httpx - Not used in current implementation, could be added back in  future
+#import httpx #- Not used in current implementation, could be added back in  future
 
-def make_selenium_request (league = None):
+def make_selenium_request (league, chromedriver_path = None):
     '''
     Function to make a call to get lines/spreads from prizepicks. Function takes in a league name and makes a call to PrizePicks API to get all
     the current bets for that given league. Function requires chromedriver be installed
+
+    Function has a few ways it can fail and report bad status:
+        1 - invalid league
+        2 - invalid chromedriver path
     '''
     league = validate_league(league)
     if league is None:
-        return(1)
+        return 1
 
-    '''using as placeholders for api call'''
+    '''using as defaults for api call'''
     page_num = 20
     single_stat = "true"
     game_mode = "pickem"
@@ -20,10 +23,10 @@ def make_selenium_request (league = None):
     #can I make this headless or go faster at least?
     ops = webdriver.ChromeOptions()
     #ops.add_argument("--headless=new")
-    cd_info = helper.get_secret("chromedriver")
+    cd_info = chromedriver_path if chromedriver_path is not None else helper.get_secret("chromedriver")
     if cd_info.get('path') is None:
         print("CRITICAL:Not chromedriver path found, exiting!")
-        return None
+        return 2
     session = webdriver.Chrome(cd_info['path'], options=ops)
     session.get(api_call)
     source = session.page_source
@@ -32,18 +35,15 @@ def make_selenium_request (league = None):
 
 def validate_league(league):
     '''
-    Function to return league number if known. If league is not known, then returns None. If league is None,
-    then default it to return 9.
+    Function to return league number if known. If league is not known, then returns None.
     '''
-    if league is None:
-        return(9)
-
     known_leagues = {
         "NFL":9,
         "CFB":15,
         "MLB":2,
         "WNBA":3,
-        "Soccer":82
+        "Soccer":82,
+        "CFB2H": 150
     }
     return known_leagues.get(league)
 
